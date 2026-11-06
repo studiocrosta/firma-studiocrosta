@@ -1,6 +1,16 @@
 """
 Firma email dinamica di Studio Crosta.
-Dal link di una scheda corso genera docs/firma.png e docs/corso.html
+
+Dal link di una scheda corso genera:
+  docs/firma.png   -> l'immagine della firma (foto del corso + titolo, date, ore)
+  docs/corso.html  -> la pagina ponte che porta alla scheda del corso
+
+Uso:
+  python genera_firma.py https://studiocrosta.com/it/corso/10/3171
+  python genera_firma.py LINK --titolo "Addetti antincendio – livello 2"
+  python genera_firma.py LINK --info "Lunedì 23 novembre · 8 ore · in aula a Fermo"
+
+Titolo e info sono facoltativi: se mancano li legge dalla pagina.
 """
 
 import argparse
@@ -31,10 +41,18 @@ def scarica(url):
 
 
 def foto_duotono(sorgente):
+    """Scarica la foto, la porta in bianco e nero, ne normalizza la luminosità
+    (così foto chiare e scure rendono uguale) e la colora con i tre toni di DUOTONO."""
     from PIL import Image, ImageOps
-    req = urllib.request.Request(sorgente, headers=UA)
-    with urllib.request.urlopen(req, timeout=30) as r:
-        dati = r.read()
+    m = re.search(r"drive\.google\.com/(?:file/d/|open\?id=)([\w-]+)", sorgente)
+    if m:
+        sorgente = f"https://drive.google.com/uc?export=download&id={m.group(1)}"
+    if re.match(r"https?://", sorgente):
+        req = urllib.request.Request(sorgente, headers=UA)
+        with urllib.request.urlopen(req, timeout=30) as r:
+            dati = r.read()
+    else:
+        dati = open(sorgente, "rb").read()
     im = Image.open(io.BytesIO(dati)).convert("L")
     im = ImageOps.autocontrast(im, cutoff=2)
     ombre, medi, luci = DUOTONO
@@ -49,6 +67,7 @@ def testo(frammento):
 
 
 def leggi_scheda(link, pagina):
+    """Estrae i dati del corso principale (non quelli delle card in fondo alla pagina)."""
     principale = pagina.split("Calendario Lezioni", 1)
     blocco = pagina[: pagina.find("</section>", pagina.find("<h1")) + 1]
 
@@ -108,7 +127,7 @@ def componi_info(dati):
     return " · ".join(p for p in pezzi if p)
 
 
-def banner_html(titolo, info, foto):
+def banner_html(titolo, info, foto, etichetta="Corso in evidenza", cta="Scheda e iscrizione"):
     e = html.escape
     img = f'<img src="{e(foto)}" alt="">' if foto else ""
     size = 19 if len(titolo) <= 24 else 17
@@ -125,8 +144,8 @@ html,body{{margin:0;background:#fff}}
 .l{{font-size:13px;font-weight:700;color:#2e3a96;margin-top:3px}}
 </style></head><body><div class="b">
 <div class="foto">{img}</div>
-<div class="m"><div class="k">Corso in evidenza</div><div class="t">{e(titolo)}</div>
-<div class="d">{e(info)}</div><div class="l">Scheda e iscrizione &rsaquo;</div></div>
+<div class="m"><div class="k">{e(etichetta)}</div><div class="t">{e(titolo)}</div>
+<div class="d">{e(info)}</div><div class="l">{e(cta)} &rsaquo;</div></div>
 </div></body></html>"""
 
 
@@ -140,32 +159,42 @@ def redirect_html(link):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("link")
-    ap.add_argument("--titolo", default="")
-    ap.add_argument("--info", default="")
-    ap.add_argument("--foto", default="")
+    ap.add_argument("link", help="link della scheda corso")
+    ap.add_argument("--titolo", default="", help="titolo breve (facoltativo)")
+    ap.add_argument("--info", default="", help="riga date/ore (facoltativa)")
+    ap.add_argument("--foto", default="", help="link di un'altra foto (facoltativo)")
+    ap.add_argument("--etichetta", default="", help="scritta in alto, es. Formazione finanziata")
+    ap.add_argument("--cta", default="", help="testo del link in basso, es. Scopri di più")
+    ap.add_argument("--manuale", action="store_true", help="non legge la pagina: usa solo i campi indicati")
+    ap.add_argument("--pagina", default="", help=argparse.SUPPRESS)  # file HTML locale, per le prove
     a = ap.parse_args()
 
-    pagina = scarica(a.link)
-    dati = leggi_scheda(a.link, pagina)
+    if a.manuale:
+        dati = {"titolo": "", "ore": "", "sede": "", "date": [], "foto": ""}
+    else:
+        pagina = open(a.pagina, encoding="utf-8").read() if a.pagina else scarica(a.link)
+        dati = leggi_scheda(a.link, pagina)
     titolo = a.titolo.strip() or titolo_breve(dati["titolo"])
     info = a.info.strip() or componi_info(dati)
+    etichetta = a.etichetta.strip() or ("In evidenza" if a.manuale else "Corso in evidenza")
+    cta = a.cta.strip().rstrip("›> ").strip() or ("Scopri di più" if a.manuale else "Scheda e iscrizione")
     foto = a.foto.strip() or dati["foto"]
     if not titolo:
-        sys.exit("Non ho trovato il titolo nella pagina: indicalo nel campo titolo")
+        sys.exit("Non ho trovato il titolo nella pagina: indicalo con --titolo")
 
     print(f"Titolo: {titolo}\nInfo:   {info}\nFoto:   {foto or '(nessuna)'}")
     foto_img = foto_duotono(foto) if foto else ""
 
     os.makedirs("docs", exist_ok=True)
     with open("docs/banner.html", "w", encoding="utf-8") as f:
-        f.write(banner_html(titolo, info, foto_img))
+        f.write(banner_html(titolo, info, foto_img, etichetta, cta))
     with open("docs/corso.html", "w", encoding="utf-8") as f:
         f.write(redirect_html(a.link))
 
     from playwright.sync_api import sync_playwright
     with sync_playwright() as p:
-        b = p.chromium.launch()
+        exe = os.environ.get("CHROMIUM_PATH")
+        b = p.chromium.launch(executable_path=exe) if exe else p.chromium.launch()
         pg = b.new_page(viewport={"width": LARGHEZZA, "height": ALTEZZA}, device_scale_factor=2)
         pg.goto("file://" + os.path.abspath("docs/banner.html"), wait_until="networkidle")
         pg.locator(".b").screenshot(path="docs/firma.png")
