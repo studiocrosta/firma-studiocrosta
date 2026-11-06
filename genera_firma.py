@@ -4,7 +4,9 @@ Dal link di una scheda corso genera docs/firma.png e docs/corso.html
 """
 
 import argparse
+import base64
 import html
+import io
 import os
 import re
 import sys
@@ -18,11 +20,28 @@ MESI = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio",
         "agosto", "settembre", "ottobre", "novembre", "dicembre"]
 UA = {"User-Agent": "Mozilla/5.0 (firma Studio Crosta)"}
 
+# Duotono blu: ombre, toni medi, luci. Per un blu più leggero schiarisci i tre colori.
+DUOTONO = ("#1d2466", "#6470c0", "#f0f2fb")
+
 
 def scarica(url):
     req = urllib.request.Request(url, headers=UA)
     with urllib.request.urlopen(req, timeout=30) as r:
         return r.read().decode("utf-8", errors="replace")
+
+
+def foto_duotono(sorgente):
+    from PIL import Image, ImageOps
+    req = urllib.request.Request(sorgente, headers=UA)
+    with urllib.request.urlopen(req, timeout=30) as r:
+        dati = r.read()
+    im = Image.open(io.BytesIO(dati)).convert("L")
+    im = ImageOps.autocontrast(im, cutoff=2)
+    ombre, medi, luci = DUOTONO
+    im = ImageOps.colorize(im, black=ombre, mid=medi, white=luci)
+    buf = io.BytesIO()
+    im.save(buf, "JPEG", quality=90)
+    return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
 
 
 def testo(frammento):
@@ -92,12 +111,12 @@ def componi_info(dati):
 def banner_html(titolo, info, foto):
     e = html.escape
     img = f'<img src="{e(foto)}" alt="">' if foto else ""
-    size = 19 if len(titolo) <= 34 else 16
+    size = 19 if len(titolo) <= 24 else 17
     return f"""<!doctype html><html lang="it"><head><meta charset="utf-8"><style>
 html,body{{margin:0;background:#fff}}
 .b{{width:{LARGHEZZA}px;height:{ALTEZZA}px;display:flex;overflow:hidden;font-family:'Segoe UI','Open Sans',Arial,sans-serif}}
 .foto{{width:190px;flex-shrink:0;background:#2e3a96;overflow:hidden;position:relative}}
-.foto img{{width:100%;height:100%;object-fit:cover;display:block;filter:grayscale(1) brightness(1.9) contrast(1.05);mix-blend-mode:multiply}}
+.foto img{{width:100%;height:100%;object-fit:cover;display:block}}
 .foto:after{{content:"";position:absolute;right:0;top:0;bottom:0;width:4px;background:#d4a843}}
 .m{{flex:1;background:#f6ecd2;padding:0 20px;display:flex;flex-direction:column;justify-content:center;gap:4px}}
 .k{{font-size:10px;font-weight:700;letter-spacing:2.4px;text-transform:uppercase;color:#6f6136}}
@@ -136,10 +155,11 @@ def main():
         sys.exit("Non ho trovato il titolo nella pagina: indicalo nel campo titolo")
 
     print(f"Titolo: {titolo}\nInfo:   {info}\nFoto:   {foto or '(nessuna)'}")
+    foto_img = foto_duotono(foto) if foto else ""
 
     os.makedirs("docs", exist_ok=True)
     with open("docs/banner.html", "w", encoding="utf-8") as f:
-        f.write(banner_html(titolo, info, foto))
+        f.write(banner_html(titolo, info, foto_img))
     with open("docs/corso.html", "w", encoding="utf-8") as f:
         f.write(redirect_html(a.link))
 
