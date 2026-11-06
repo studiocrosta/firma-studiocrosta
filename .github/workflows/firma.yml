@@ -1,0 +1,42 @@
+name: Aggiorna firma
+
+on:
+  workflow_dispatch:
+    inputs:
+      link:
+        description: "Link della scheda corso (es. https://studiocrosta.com/it/corso/10/3171)"
+        required: true
+      titolo:
+        description: "Titolo breve (consigliato, es. Addetti antincendio – livello 2)"
+        required: false
+      info:
+        description: "Riga date/ore (facoltativa: se vuota la legge dalla pagina)"
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  firma:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Installa Playwright
+        run: |
+          pip install playwright==1.48.0
+          python -m playwright install --with-deps chromium
+      - name: Genera immagine e link
+        env:
+          LINK: ${{ inputs.link }}
+          TITOLO: ${{ inputs.titolo }}
+          INFO: ${{ inputs.info }}
+        run: python genera_firma.py "$LINK" --titolo "$TITOLO" --info "$INFO"
+      - name: Pubblica
+        run: |
+          git config user.name "firma-bot"
+          git config user.email "firma-bot@users.noreply.github.com"
+          git add docs
+          git diff --cached --quiet || (git commit -m "Firma: ${{ inputs.titolo || inputs.link }}" && git push)
