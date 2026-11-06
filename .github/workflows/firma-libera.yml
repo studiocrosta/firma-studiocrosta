@@ -1,0 +1,54 @@
+name: Firma libera (promo, fondi, eventi)
+
+on:
+  workflow_dispatch:
+    inputs:
+      titolo:
+        description: "Titolo (es. Voucher Azienda FonARCom)"
+        required: true
+      info:
+        description: "Riga sotto il titolo (es. Nuovi fondi per formare i tuoi dipendenti)"
+        required: false
+      link:
+        description: "Dove porta il clic (pagina del sito, o mailto:formazione@studiocrosta.com)"
+        required: true
+      foto:
+        description: "Link della foto (imgur o Google Drive condiviso)"
+        required: false
+      etichetta:
+        description: "Scritta piccola in alto (vuoto = In evidenza)"
+        required: false
+      pulsante:
+        description: "Testo del link in basso (vuoto = Scopri di più)"
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  firma:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Installa Playwright
+        run: |
+          pip install playwright==1.48.0 pillow
+          python -m playwright install --with-deps chromium
+      - name: Genera immagine e link
+        env:
+          TITOLO: ${{ inputs.titolo }}
+          INFO: ${{ inputs.info }}
+          LINK: ${{ inputs.link }}
+          FOTO: ${{ inputs.foto }}
+          ETICHETTA: ${{ inputs.etichetta }}
+          PULSANTE: ${{ inputs.pulsante }}
+        run: python genera_firma.py "$LINK" --manuale --titolo "$TITOLO" --info "$INFO" --foto "$FOTO" --etichetta "$ETICHETTA" --cta "$PULSANTE"
+      - name: Pubblica
+        run: |
+          git config user.name "firma-bot"
+          git config user.email "firma-bot@users.noreply.github.com"
+          git add docs
+          git diff --cached --quiet || (git commit -m "Firma: ${{ inputs.titolo }}" && git push)
