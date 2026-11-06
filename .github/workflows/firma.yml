@@ -26,7 +26,7 @@ jobs:
           python-version: "3.12"
       - name: Installa Playwright
         run: |
-          pip install playwright==1.48.0
+          pip install playwright==1.48.0 pillow
           python -m playwright install --with-deps chromium
       - name: Genera immagine e link
         env:
