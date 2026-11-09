@@ -149,6 +149,11 @@ html,body{{margin:0;background:#fff}}
 </div></body></html>"""
 
 
+def con_www(link):
+    """Porta i link del sito sul dominio con il www (es. studiocrosta.com -> www.studiocrosta.com)."""
+    return re.sub(r"^(https?://)(?:www\.)?studiocrosta\.com", r"\1www.studiocrosta.com", link.strip(), flags=re.I)
+
+
 def con_utm(link, campagna):
     """Aggiunge i parametri UTM ai link del sito, così Analytics conta i clic dalla firma."""
     if not re.match(r"https?://", link) or "utm_" in link:
@@ -177,6 +182,8 @@ def main():
     ap.add_argument("--manuale", action="store_true", help="non legge la pagina: usa solo i campi indicati")
     ap.add_argument("--pagina", default="", help=argparse.SUPPRESS)  # file HTML locale, per le prove
     a = ap.parse_args()
+    a.link = con_www(a.link)
+    a.foto = con_www(a.foto)
 
     if a.manuale:
         dati = {"titolo": "", "ore": "", "sede": "", "date": [], "foto": ""}
