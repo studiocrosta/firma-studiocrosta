@@ -149,6 +149,15 @@ html,body{{margin:0;background:#fff}}
 </div></body></html>"""
 
 
+def con_utm(link, campagna):
+    """Aggiunge i parametri UTM ai link del sito, così Analytics conta i clic dalla firma."""
+    if not re.match(r"https?://", link) or "utm_" in link:
+        return link
+    slug = re.sub(r"[^a-z0-9]+", "-", campagna.lower()).strip("-")[:50] or "firma"
+    sep = "&" if "?" in link else "?"
+    return f"{link}{sep}utm_source=firma&utm_medium=email&utm_campaign={slug}"
+
+
 def redirect_html(link):
     l = html.escape(link, quote=True)
     return f"""<!doctype html><html lang="it"><head><meta charset="utf-8">
@@ -189,7 +198,7 @@ def main():
     with open("docs/banner.html", "w", encoding="utf-8") as f:
         f.write(banner_html(titolo, info, foto_img, etichetta, cta))
     with open("docs/corso.html", "w", encoding="utf-8") as f:
-        f.write(redirect_html(a.link))
+        f.write(redirect_html(con_utm(a.link, titolo)))
 
     from playwright.sync_api import sync_playwright
     with sync_playwright() as p:
