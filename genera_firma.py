@@ -2,8 +2,8 @@
 Firma email dinamica di Studio Crosta.
 
 Dal link di una scheda corso genera:
-  docs/firma.png   -> l'immagine della firma (foto del corso + titolo, date, ore)
-  docs/banner-firma.png -> la stessa immagine a 400 px, da caricare a mano nel nuovo Outlook
+  docs/firma.png   -> l'immagine della firma, 400x108 (foto del corso + titolo, date, ore)
+  docs/banner-firma.png -> copia identica, da caricare a mano nel nuovo Outlook
   docs/corso.html  -> la pagina ponte che porta alla scheda del corso
 
 Uso:
@@ -220,8 +220,13 @@ def main():
 
     # Copia a 400 px di larghezza, da scaricare e caricare a mano nel nuovo Outlook
     from PIL import Image
+    # L'immagine si genera al doppio della risoluzione e poi si riduce a 400x108, la misura esatta
+    # in cui la firma la mostra. Così Outlook, quando la incorpora, non la ridimensiona e non la
+    # ricomprime in JPG (era questo a sgranarla).
     im = Image.open("docs/firma.png").convert("RGB")
-    im.resize((400, round(400 * im.height / im.width)), Image.LANCZOS).save("docs/banner-firma.png", optimize=True)
+    im = im.resize((400, round(400 * im.height / im.width)), Image.LANCZOS)
+    im.save("docs/firma.png", optimize=True)
+    im.save("docs/banner-firma.png", optimize=True)
     print("Fatto: docs/firma.png, docs/banner-firma.png e docs/corso.html")
 
 
