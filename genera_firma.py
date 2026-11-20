@@ -25,7 +25,9 @@ import urllib.parse
 import urllib.request
 from datetime import date
 
-LARGHEZZA, ALTEZZA = 520, 140
+# La firma si disegna direttamente a 400x108, la misura esatta in cui Outlook la mostra:
+# niente ridimensionamento dopo, così il testo resta allineato ai pixel e non si sgrana.
+LARGHEZZA, ALTEZZA = 400, 108
 GIORNI = ["lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sabato", "domenica"]
 MESI = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio",
         "agosto", "settembre", "ottobre", "novembre", "dicembre"]
@@ -131,18 +133,18 @@ def componi_info(dati):
 def banner_html(titolo, info, foto, etichetta="Corso in evidenza", cta="Scheda e iscrizione"):
     e = html.escape
     img = f'<img src="{e(foto)}" alt="">' if foto else ""
-    size = 19 if len(titolo) <= 24 else 17
+    size = 15 if len(titolo) <= 30 else 13
     return f"""<!doctype html><html lang="it"><head><meta charset="utf-8"><style>
 html,body{{margin:0;background:#fff}}
 .b{{width:{LARGHEZZA}px;height:{ALTEZZA}px;display:flex;overflow:hidden;font-family:'Segoe UI','Open Sans',Arial,sans-serif}}
-.foto{{width:190px;flex-shrink:0;background:#2e3a96;overflow:hidden;position:relative}}
+.foto{{width:140px;flex-shrink:0;background:#2e3a96;overflow:hidden;position:relative}}
 .foto img{{width:100%;height:100%;object-fit:cover;display:block}}
-.foto:after{{content:"";position:absolute;right:0;top:0;bottom:0;width:4px;background:#d4a843}}
-.m{{flex:1;background:#f6ecd2;padding:0 20px;display:flex;flex-direction:column;justify-content:center;gap:4px}}
-.k{{font-size:10px;font-weight:700;letter-spacing:2.4px;text-transform:uppercase;color:#6f6136}}
-.t{{font-size:{size}px;font-weight:800;line-height:1.2;color:#1a1a1a;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}}
-.d{{font-size:13px;color:#4a4a4a}}
-.l{{font-size:13px;font-weight:700;color:#2e3a96;margin-top:3px}}
+.foto:after{{content:"";position:absolute;right:0;top:0;bottom:0;width:3px;background:#d4a843}}
+.m{{flex:1;background:#f6ecd2;padding:0 14px;display:flex;flex-direction:column;justify-content:center;gap:3px}}
+.k{{font-size:9px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:#6f6136}}
+.t{{font-size:{size}px;font-weight:700;line-height:1.2;color:#1a1a1a;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}}
+.d{{font-size:11px;line-height:1.3;color:#3a3a3a}}
+.l{{font-size:11px;font-weight:700;color:#2e3a96;margin-top:2px}}
 </style></head><body><div class="b">
 <div class="foto">{img}</div>
 <div class="m"><div class="k">{e(etichetta)}</div><div class="t">{e(titolo)}</div>
@@ -212,19 +214,19 @@ def main():
     with sync_playwright() as p:
         exe = os.environ.get("CHROMIUM_PATH")
         b = p.chromium.launch(executable_path=exe) if exe else p.chromium.launch()
-        pg = b.new_page(viewport={"width": LARGHEZZA, "height": ALTEZZA}, device_scale_factor=2)
+        # Scala 1: il browser disegna il testo direttamente a 400x108 pixel, già alla misura finale.
+        # (Prima si disegnava a 520x140 al doppio e poi si riduceva: il testo finiva a misure
+        # frazionarie, tipo 7,7 px, e si impastava.) La misura esatta evita anche che Outlook,
+        # quando la incorpora, la ridimensioni e la ricomprima in JPG.
+        pg = b.new_page(viewport={"width": LARGHEZZA, "height": ALTEZZA}, device_scale_factor=1)
         pg.goto("file://" + os.path.abspath("docs/banner.html"), wait_until="networkidle")
         pg.locator(".b").screenshot(path="docs/firma.png")
         b.close()
     os.remove("docs/banner.html")
 
-    # Copia a 400 px di larghezza, da scaricare e caricare a mano nel nuovo Outlook
+    # Copia identica, da scaricare e caricare a mano nel nuovo Outlook
     from PIL import Image
-    # L'immagine si genera al doppio della risoluzione e poi si riduce a 400x108, la misura esatta
-    # in cui la firma la mostra. Così Outlook, quando la incorpora, non la ridimensiona e non la
-    # ricomprime in JPG (era questo a sgranarla).
     im = Image.open("docs/firma.png").convert("RGB")
-    im = im.resize((400, round(400 * im.height / im.width)), Image.LANCZOS)
     im.save("docs/firma.png", optimize=True)
     im.save("docs/banner-firma.png", optimize=True)
     print("Fatto: docs/firma.png, docs/banner-firma.png e docs/corso.html")
